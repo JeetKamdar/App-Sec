@@ -2,19 +2,20 @@ from django.shortcuts import render
 from django.contrib.auth.forms import UserCreationForm
 from django.urls import reverse_lazy
 from django.views import generic
-from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from PIL import Image
 import random
-import time
 import os
+from datetime import datetime
+from accounts.models import Activity_Log
+from django.contrib.auth.decorators import login_required
 
 class SignUp(generic.CreateView):
 	form_class = UserCreationForm
 	success_url = reverse_lazy('login')
 	template_name = 'signup.html'
 
-
+@login_required
 def simple_upload(request):
 	if request.method == 'POST' and request.FILES['myfile']:
 		myfile = request.FILES['myfile']
@@ -22,19 +23,23 @@ def simple_upload(request):
 		filename = fs.save(myfile.name, myfile)
 		uploaded_file_url = fs.url(filename)
 		script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-		#print(script_dir)
+		request.session['username'] = str(request.user)
+		uname = request.session['username']
+		request.session['imgtime'] = str(datetime.utcnow())
+		dt = request.session['imgtime']
 		try:
-			print(script_dir)
-			print(uploaded_file_url)
 			im = Image.open(script_dir + uploaded_file_url)
 			img1 = image_resize(uploaded_file_url, script_dir)
 			resized_image_url = fs.url(img1) + ".jpg"
-			print(resized_image_url)
+			d = Activity_Log(username = uname, date_time = dt, activity = 'Uploaded Image')
+			d.save()
 			return render(request, 'simple_upload.html', {
 			'uploaded_file_url': uploaded_file_url,
 			'resized_image_url': resized_image_url
 			})
 		except IOError:
+			d = Activity_Log(username = uname, date_time = dt, activity = 'Uploaded Corrupted File')
+			d.save()
 			os.remove(script_dir + uploaded_file_url)
 			return render(request, 'image_error.html')	
 	return render(request, 'simple_upload.html')
